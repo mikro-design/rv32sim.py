@@ -112,12 +112,6 @@ def run_elf(path, tohost_addr, max_steps=MAX_STEPS):
             except TrapException as exc:
                 # Emulate trap entry so compliance tests can run their handlers.
                 sim.pc = sim._raise_trap(exc.cause, exc.tval)
-            except ValueError as exc:
-                msg = str(exc)
-                if "Illegal" in msg or "Unsupported" in msg:
-                    sim.pc = sim._raise_trap(2, sim.last_instr or 0)
-                else:
-                    raise
             except HaltException as exc:
                 return exc
             steps += 1

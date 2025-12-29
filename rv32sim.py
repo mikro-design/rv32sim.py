@@ -707,7 +707,7 @@ class RV32Sim:
                       (((c_instr >> 11) & 0x1) << 4) | (((c_instr >> 5) & 0x1) << 3) | \
                       (((c_instr >> 6) & 0x1) << 2)
                 if imm == 0:
-                    raise ValueError("Illegal C.ADDI4SPN with imm=0")
+                    self._illegal_instruction(c_instr)
                 return (imm << 20) | (2 << 15) | (0 << 12) | (rd_p << 7) | 0x13  # addi rd', x2, imm
             elif funct3 == 0x2:  # C.LW
                 imm = (((c_instr >> 6) & 0x1) << 2) | (((c_instr >> 10) & 0x7) << 3) | (((c_instr >> 5) & 0x1) << 6)
@@ -719,7 +719,7 @@ class RV32Sim:
                 imm_4_0 = imm & 0x1f
                 return (imm_11_5 << 25) | (rs2_p << 20) | (rs1_p << 15) | (0x2 << 12) | (imm_4_0 << 7) | 0x23  # sw
             else:
-                raise ValueError(f"Unsupported C0 compressed instruction 0x{c_instr:04x}")
+                self._illegal_instruction(c_instr)
 
         elif quadrant == 1:  # C1
             rd_rs1 = (c_instr >> 7) & 0x1f
@@ -748,26 +748,26 @@ class RV32Sim:
                           (((c_instr >> 2) & 0x1) << 5)
                     imm = self.sign_extend(imm, 10)
                     if imm == 0:
-                        raise ValueError("Illegal C.ADDI16SP with imm=0")
+                        self._illegal_instruction(c_instr)
                     return (imm << 20) | (2 << 15) | (0 << 12) | (2 << 7) | 0x13  # addi x2, x2, imm
                 if rd_rs1 == 0:
-                    raise ValueError("Illegal C.LUI with rd=x0")
+                    self._illegal_instruction(c_instr)
                 imm = (((c_instr >> 12) & 0x1) << 5) | ((c_instr >> 2) & 0x1f)
                 imm = self.sign_extend(imm, 6) << 12
                 if imm == 0:
-                    raise ValueError("Illegal C.LUI with imm=0")
+                    self._illegal_instruction(c_instr)
                 return (imm & 0xfffff000) | (rd_rs1 << 7) | 0x37  # lui
             elif funct3 == 0x4:
                 op = (c_instr >> 10) & 0x3
                 bit12 = (c_instr >> 12) & 0x1
                 if op == 0x0:  # C.SRLI
                     if bit12:
-                        raise ValueError("Illegal C.SRLI with shamt[5]=1")
+                        self._illegal_instruction(c_instr)
                     shamt = (c_instr >> 2) & 0x1f
                     return (shamt << 20) | (rd_p << 15) | (0x5 << 12) | (rd_p << 7) | 0x13
                 elif op == 0x1:  # C.SRAI
                     if bit12:
-                        raise ValueError("Illegal C.SRAI with shamt[5]=1")
+                        self._illegal_instruction(c_instr)
                     shamt = (c_instr >> 2) & 0x1f
                     imm = (0x20 << 5) | shamt
                     return (imm << 20) | (rd_p << 15) | (0x5 << 12) | (rd_p << 7) | 0x13
@@ -777,7 +777,7 @@ class RV32Sim:
                     return (imm << 20) | (rd_p << 15) | (0x7 << 12) | (rd_p << 7) | 0x13
                 elif op == 0x3:  # C.SUB/C.XOR/C.OR/C.AND
                     if bit12:
-                        raise ValueError(f"Unsupported C1 ALU opcode 0x{c_instr:04x}")
+                        self._illegal_instruction(c_instr)
                     funct2 = (c_instr >> 5) & 0x3
                     if funct2 == 0x0:  # C.SUB
                         return (0x20 << 25) | (rs2_p << 20) | (rd_p << 15) | (0x0 << 12) | (rd_p << 7) | 0x33
@@ -787,7 +787,7 @@ class RV32Sim:
                         return (0x00 << 25) | (rs2_p << 20) | (rd_p << 15) | (0x6 << 12) | (rd_p << 7) | 0x33
                     elif funct2 == 0x3:  # C.AND
                         return (0x00 << 25) | (rs2_p << 20) | (rd_p << 15) | (0x7 << 12) | (rd_p << 7) | 0x33
-                    raise ValueError(f"Unsupported C1 ALU opcode 0x{c_instr:04x}")
+                    self._illegal_instruction(c_instr)
             elif funct3 == 0x5:  # C.J
                 imm = (((c_instr >> 12) & 0x1) << 11) | (((c_instr >> 11) & 0x1) << 4) | \
                       (((c_instr >> 9) & 0x3) << 8) | (((c_instr >> 8) & 0x1) << 10) | \
@@ -808,7 +808,7 @@ class RV32Sim:
                 imm = self.sign_extend(imm, 9)
                 return branch_imm_from_c(imm) | (0 << 20) | (rd_p << 15) | (0x1 << 12) | 0x63
             else:
-                raise ValueError(f"Unsupported C1 compressed instruction 0x{c_instr:04x}")
+                self._illegal_instruction(c_instr)
 
         elif quadrant == 2:  # C2
             rd_rs1 = (c_instr >> 7) & 0x1f
@@ -816,14 +816,14 @@ class RV32Sim:
 
             if funct3 == 0x0:  # C.SLLI
                 if rd_rs1 == 0:
-                    raise ValueError("Illegal C.SLLI with rd=x0")
+                    self._illegal_instruction(c_instr)
                 if (c_instr >> 12) & 0x1:
-                    raise ValueError("Illegal C.SLLI with shamt[5]=1")
+                    self._illegal_instruction(c_instr)
                 shamt = (c_instr >> 2) & 0x1f
                 return (shamt << 20) | (rd_rs1 << 15) | (0x1 << 12) | (rd_rs1 << 7) | 0x13
             elif funct3 == 0x2:  # C.LWSP
                 if rd_rs1 == 0:
-                    raise ValueError("Illegal C.LWSP with rd=x0")
+                    self._illegal_instruction(c_instr)
                 imm = (((c_instr >> 12) & 0x1) << 5) | (((c_instr >> 4) & 0x7) << 2) | \
                       (((c_instr >> 2) & 0x3) << 6)
                 return (imm << 20) | (2 << 15) | (0x2 << 12) | (rd_rs1 << 7) | 0x03
@@ -832,7 +832,7 @@ class RV32Sim:
                 if bit12 == 0:
                     if rs2 == 0:
                         if rd_rs1 == 0:
-                            raise ValueError("Illegal C.JR with rs1=x0")
+                            self._illegal_instruction(c_instr)
                         return (0 << 20) | (rd_rs1 << 15) | (0 << 12) | (0 << 7) | 0x67  # jalr x0, 0(rs1)
                     return (0 << 25) | (rs2 << 20) | (0 << 15) | (0 << 12) | (rd_rs1 << 7) | 0x33  # add rd, x0, rs2
                 else:
@@ -847,9 +847,9 @@ class RV32Sim:
                 imm_4_0 = imm & 0x1f
                 return (imm_11_5 << 25) | (rs2 << 20) | (2 << 15) | (0x2 << 12) | (imm_4_0 << 7) | 0x23
             else:
-                raise ValueError(f"Unsupported C2 compressed instruction 0x{c_instr:04x}")
+                self._illegal_instruction(c_instr)
 
-        raise ValueError(f"Unsupported compressed instruction 0x{c_instr:04x}")
+        self._illegal_instruction(c_instr)
 
     def execute(self):
         if self.pc in self.func_stubs:
@@ -907,17 +907,17 @@ class RV32Sim:
                 elif funct3 == 0x5:  # BEXT
                     self.regs[rd] = (rs1_u >> shamt) & 1
                 else:
-                    raise ValueError(f"Illegal Zbs instruction 0x{instr:08x} at 0x{self.pc:08x}")
+                    self._illegal_instruction()
             elif funct7 == 0x14:  # Zbs extension (more bit ops)
                 if funct3 == 0x1:  # BSET
                     self.regs[rd] = rs1_u | (1 << shamt)
                 else:
-                    raise ValueError(f"Illegal Zbs instruction 0x{instr:08x} at 0x{self.pc:08x}")
+                    self._illegal_instruction()
             elif funct7 == 0x34:  # Zbs BINV
                 if funct3 == 0x1:  # BINV
                     self.regs[rd] = rs1_u ^ (1 << shamt)
                 else:
-                    raise ValueError(f"Illegal Zbs instruction 0x{instr:08x} at 0x{self.pc:08x}")
+                    self._illegal_instruction()
             elif funct7 == 0x10:  # Zba extension (shift-and-add)
                 if funct3 == 0x2:  # SH1ADD
                     self.regs[rd] = (rs2_u + ((rs1_u << 1) & 0xffffffff)) & 0xffffffff
@@ -926,7 +926,7 @@ class RV32Sim:
                 elif funct3 == 0x6:  # SH3ADD
                     self.regs[rd] = (rs2_u + ((rs1_u << 3) & 0xffffffff)) & 0xffffffff
                 else:
-                    raise ValueError(f"Illegal Zba instruction 0x{instr:08x} at 0x{self.pc:08x}")
+                    self._illegal_instruction()
             elif funct7 == 0x05:  # Zbb extension (min/max)
                 if funct3 == 0x4:  # MIN
                     self.regs[rd] = rs1_u if rs1_s < rs2_s else rs2_u
@@ -937,12 +937,12 @@ class RV32Sim:
                 elif funct3 == 0x7:  # MAXU
                     self.regs[rd] = rs1_u if rs1_u > rs2_u else rs2_u
                 else:
-                    raise ValueError(f"Illegal Zbb instruction 0x{instr:08x} at 0x{self.pc:08x}")
+                    self._illegal_instruction()
             elif funct7 == 0x04:  # Zbb extension (zext.h)
                 if funct3 == 0x4 and rs2 == 0:  # ZEXT.H
                     self.regs[rd] = rs1_u & 0xffff
                 else:
-                    raise ValueError(f"Illegal Zbb instruction 0x{instr:08x} at 0x{self.pc:08x}")
+                    self._illegal_instruction()
             elif funct7 == 0x01:  # M extension (multiply/divide)
                 if funct3 == 0x0:  # MUL
                     self.regs[rd] = (rs1_u * rs2_u) & 0xffffffff
@@ -970,7 +970,7 @@ class RV32Sim:
                 elif funct3 == 0x7:  # REMU
                     self.regs[rd] = rs1_u if rs2_u == 0 else (rs1_u % rs2_u) & 0xffffffff
                 else:
-                    raise ValueError(f"Illegal M extension instruction 0x{instr:08x} at 0x{self.pc:08x}")
+                    self._illegal_instruction()
             elif funct7 in (0x00, 0x20):
                 if funct3 == 0x0:
                     if funct7 == 0x00:  # ADD
@@ -979,19 +979,19 @@ class RV32Sim:
                         self.regs[rd] = rs1_u - rs2_u
                 elif funct3 == 0x1:
                     if funct7 != 0x00:
-                        raise ValueError(f"Illegal SLL instruction 0x{instr:08x} at 0x{self.pc:08x}")
+                        self._illegal_instruction()
                     self.regs[rd] = rs1_u << shamt
                 elif funct3 == 0x2:
                     if funct7 != 0x00:
-                        raise ValueError(f"Illegal SLT instruction 0x{instr:08x} at 0x{self.pc:08x}")
+                        self._illegal_instruction()
                     self.regs[rd] = 1 if rs1_s < rs2_s else 0
                 elif funct3 == 0x3:
                     if funct7 != 0x00:
-                        raise ValueError(f"Illegal SLTU instruction 0x{instr:08x} at 0x{self.pc:08x}")
+                        self._illegal_instruction()
                     self.regs[rd] = 1 if rs1_u < rs2_u else 0
                 elif funct3 == 0x4:
                     if funct7 != 0x00:
-                        raise ValueError(f"Illegal XOR instruction 0x{instr:08x} at 0x{self.pc:08x}")
+                        self._illegal_instruction()
                     self.regs[rd] = rs1_u ^ rs2_u
                 elif funct3 == 0x5:
                     if funct7 == 0x00:  # SRL
@@ -999,19 +999,19 @@ class RV32Sim:
                     elif funct7 == 0x20:  # SRA
                         self.regs[rd] = self._s32(rs1_u) >> shamt
                     else:
-                        raise ValueError(f"Illegal SRL/SRA instruction 0x{instr:08x} at 0x{self.pc:08x}")
+                        self._illegal_instruction()
                 elif funct3 == 0x6:
                     if funct7 != 0x00:
-                        raise ValueError(f"Illegal OR instruction 0x{instr:08x} at 0x{self.pc:08x}")
+                        self._illegal_instruction()
                     self.regs[rd] = rs1_u | rs2_u
                 elif funct3 == 0x7:
                     if funct7 != 0x00:
-                        raise ValueError(f"Illegal AND instruction 0x{instr:08x} at 0x{self.pc:08x}")
+                        self._illegal_instruction()
                     self.regs[rd] = rs1_u & rs2_u
                 else:
-                    raise ValueError(f"Illegal R-type instruction 0x{instr:08x} at 0x{self.pc:08x}")
+                    self._illegal_instruction()
             else:
-                raise ValueError(f"Unsupported R-type instruction 0x{instr:08x} at 0x{self.pc:08x}")
+                self._illegal_instruction()
 
         elif opcode == 0b0010011:  # I-type
             imm = self.sign_extend(instr >> 20, 12)
@@ -1043,11 +1043,11 @@ class RV32Sim:
                     elif shamt == 0x05:  # SEXT.H
                         self.regs[rd] = self.sign_extend(rs1_u & 0xffff, 16) & 0xffffffff
                     else:
-                        raise ValueError(f"Illegal I-type shift instruction 0x{instr:08x} at 0x{self.pc:08x}")
+                        self._illegal_instruction()
                 elif funct7 == 0x00:  # SLLI
                     self.regs[rd] = rs1_u << shamt
                 else:
-                    raise ValueError(f"Illegal I-type shift instruction 0x{instr:08x} at 0x{self.pc:08x}")
+                    self._illegal_instruction()
             elif funct3 == 0x5:
                 if funct7 == 0x24:  # BEXTI
                     self.regs[rd] = (rs1_u >> shamt) & 1
@@ -1056,13 +1056,13 @@ class RV32Sim:
                 elif funct7 == 0x20:  # SRAI
                     self.regs[rd] = self._s32(rs1_u) >> shamt
                 else:
-                    raise ValueError(f"Illegal I-type shift instruction 0x{instr:08x} at 0x{self.pc:08x}")
+                    self._illegal_instruction()
             elif funct3 == 0x2:  # SLTI
                 self.regs[rd] = 1 if rs1_s < imm else 0
             elif funct3 == 0x3:  # SLTIU
                 self.regs[rd] = 1 if rs1_u < (imm & 0xffffffff) else 0
             else:
-                raise ValueError(f"Illegal I-type instruction 0x{instr:08x} at 0x{self.pc:08x}")
+                self._illegal_instruction()
 
         elif opcode == 0b0000011:  # Loads
             imm = self.sign_extend(instr >> 20, 12)
@@ -1078,7 +1078,7 @@ class RV32Sim:
             elif funct3 == 0x5:  # LHU
                 self.regs[rd] = self.load_half(addr)
             else:
-                raise ValueError(f"Illegal load instruction 0x{instr:08x} at 0x{self.pc:08x}")
+                self._illegal_instruction()
 
         elif opcode == 0b0100011:  # Stores
             imm = self.sign_extend((funct7 << 5) | rd, 12)
@@ -1090,13 +1090,13 @@ class RV32Sim:
             elif funct3 == 0x2:  # SW
                 self.store_word(addr, rs2_u)
             else:
-                raise ValueError(f"Illegal store instruction 0x{instr:08x} at 0x{self.pc:08x}")
+                self._illegal_instruction()
 
         elif opcode == 0b0001111:  # FENCE/FENCE.I
             if funct3 in (0x0, 0x1):
                 pass
             else:
-                raise ValueError(f"Illegal fence instruction 0x{instr:08x} at 0x{self.pc:08x}")
+                self._illegal_instruction()
 
         elif opcode == 0b1100011:  # Branches
             imm = self.sign_extend(((instr >> 31) << 12) | ((instr >> 7 & 1) << 11) | ((funct7 & 0x3f) << 5) | ((instr >> 8 & 0xf) << 1), 13)
@@ -1114,7 +1114,7 @@ class RV32Sim:
             elif funct3 == 0x7:  # BGEU
                 take = rs1_u >= rs2_u
             else:
-                raise ValueError(f"Illegal branch instruction 0x{instr:08x} at 0x{self.pc:08x}")
+                self._illegal_instruction()
             if take:
                 next_pc = self.pc + imm
 
@@ -1181,7 +1181,7 @@ class RV32Sim:
                 elif instr == 0x10500073:  # wfi
                     pass
                 else:
-                    raise ValueError(f"Illegal SYSTEM instruction 0x{instr:08x} at 0x{self.pc:08x}")
+                    self._illegal_instruction()
             else:
                 csr = (instr >> 20) & 0xfff
                 zimm = rs1  # For immediate versions, rs1 field holds immediate value
@@ -1215,10 +1215,10 @@ class RV32Sim:
                     if rd != 0:
                         self.regs[rd] = t
                 else:
-                    raise ValueError(f"Illegal CSR instruction 0x{instr:08x} at 0x{self.pc:08x}")
+                    self._illegal_instruction()
 
         else:
-            raise ValueError(f"Unsupported instruction 0x{instr:08x} at 0x{self.pc:08x}")
+            self._illegal_instruction()
 
         mcountinhibit = self.csrs.get(0x320, 0)
         if not self.mcycle_suppress and not (mcountinhibit & 0x1):
@@ -1246,6 +1246,11 @@ class RV32Sim:
         self.csrs[0x343] = tval & 0xffffffff
         self.priv = 3
         return self.csrs.get(0x305, 0) & 0xffffffff
+
+    def _illegal_instruction(self, instr=None):
+        if instr is None:
+            instr = self.last_instr if self.last_instr is not None else 0
+        raise TrapException(2, instr & 0xffffffff)
 
     def _read_tohost_value(self, fallback):
         if self.tohost_addr is None or self.tohost_size <= 0:
