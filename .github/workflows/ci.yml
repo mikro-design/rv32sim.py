@@ -5,11 +5,57 @@ on:
   pull_request:
 
 jobs:
-  test:
+  unit:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: python -m unittest discover -s tests
+      - run: python -m unittest tests.test_rv32sim
+
+  compliance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - suite: riscv-tests
+            chunk_count: 4
+            chunk_index: 0
+          - suite: riscv-tests
+            chunk_count: 4
+            chunk_index: 1
+          - suite: riscv-tests
+            chunk_count: 4
+            chunk_index: 2
+          - suite: riscv-tests
+            chunk_count: 4
+            chunk_index: 3
+          - suite: riscv-arch-test
+            chunk_count: 4
+            chunk_index: 0
+          - suite: riscv-arch-test
+            chunk_count: 4
+            chunk_index: 1
+          - suite: riscv-arch-test
+            chunk_count: 4
+            chunk_index: 2
+          - suite: riscv-arch-test
+            chunk_count: 4
+            chunk_index: 3
+          - suite: riscv-torture
+            chunk_count: 1
+            chunk_index: 0
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m unittest tests.test_compliance
+        env:
+          RV32SIM_SUITE: ${{ matrix.suite }}
+          RV32SIM_CHUNK_COUNT: ${{ matrix.chunk_count }}
+          RV32SIM_CHUNK_INDEX: ${{ matrix.chunk_index }}

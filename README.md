@@ -53,6 +53,8 @@ addresses are discovered.
 python3 -m unittest discover -s tests
 
 The compliance harness runs all ELF binaries under `tests/elfs/`.
+CI splits the suite with `RV32SIM_SUITE`, `RV32SIM_CHUNK_COUNT`, and
+`RV32SIM_CHUNK_INDEX` (optionally `RV32SIM_MAX_STEPS`).
 
 ## Notes
 

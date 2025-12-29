@@ -7,6 +7,10 @@ import unittest
 from rv32sim import RV32Sim, HaltException, TrapException
 
 
+SUITE_RISCV_TESTS = "riscv-tests"
+SUITE_ARCH_TESTS = "riscv-arch-test"
+SUITE_TORTURE = "riscv-torture"
+
 RISCV_TESTS_DIR = "tests/elfs/riscv-tests"
 ARCH_TESTS_DIR = "tests/elfs/riscv-arch-test"
 TORTURE_ELF = "tests/elfs/riscv-torture/test.elf"
@@ -15,7 +19,7 @@ TOHOST_RISCV_TESTS = 0x80001000
 TOHOST_ARCH_TESTS = 0x80003000
 TOHOST_TORTURE = 0x80001000
 
-MAX_STEPS = 2_000_000
+MAX_STEPS = int(os.getenv("RV32SIM_MAX_STEPS", "2000000"))
 STACK_SLACK = 0x10000
 PAGE_SIZE = 0x1000
 
@@ -64,6 +68,21 @@ def _load_range(path):
     start = _align_down(min_addr, PAGE_SIZE)
     end = _align_up(max_addr, PAGE_SIZE) + STACK_SLACK
     return start, end
+
+
+def _suite_enabled(name):
+    suite = os.getenv("RV32SIM_SUITE")
+    return not suite or suite == name
+
+
+def _chunk_paths(paths):
+    chunk_count = int(os.getenv("RV32SIM_CHUNK_COUNT", "1"))
+    chunk_index = int(os.getenv("RV32SIM_CHUNK_INDEX", "0"))
+    if chunk_count <= 1:
+        return paths
+    if chunk_index < 0 or chunk_index >= chunk_count:
+        raise ValueError("Invalid RV32SIM_CHUNK_INDEX/RV32SIM_CHUNK_COUNT")
+    return [path for idx, path in enumerate(paths) if idx % chunk_count == chunk_index]
 
 
 def run_elf(path, tohost_addr, max_steps=MAX_STEPS):
@@ -117,25 +136,37 @@ class ComplianceElfTests(unittest.TestCase):
         self.fail(f"{path} halted with {exc.reason} {exc.code}")
 
     def test_riscv_tests(self):
-        for path in sorted(
+        if not _suite_enabled(SUITE_RISCV_TESTS):
+            self.skipTest("suite filtered")
+        paths = _chunk_paths(sorted(
             os.path.join(RISCV_TESTS_DIR, name)
             for name in os.listdir(RISCV_TESTS_DIR)
             if os.path.isfile(os.path.join(RISCV_TESTS_DIR, name))
-        ):
+        ))
+        if not paths:
+            self.skipTest("no ELF files in this chunk")
+        for path in paths:
             with self.subTest(path=path):
                 exc = run_elf(path, TOHOST_RISCV_TESTS)
                 self._assert_pass(exc, path)
 
     def test_riscv_arch_tests(self):
-        for path in sorted(
+        if not _suite_enabled(SUITE_ARCH_TESTS):
+            self.skipTest("suite filtered")
+        paths = _chunk_paths(sorted(
             os.path.join(ARCH_TESTS_DIR, name)
             for name in os.listdir(ARCH_TESTS_DIR)
             if os.path.isfile(os.path.join(ARCH_TESTS_DIR, name))
-        ):
+        ))
+        if not paths:
+            self.skipTest("no ELF files in this chunk")
+        for path in paths:
             with self.subTest(path=path):
                 exc = run_elf(path, TOHOST_ARCH_TESTS)
                 self._assert_pass(exc, path)
 
     def test_riscv_torture(self):
+        if not _suite_enabled(SUITE_TORTURE):
+            self.skipTest("suite filtered")
         exc = run_elf(TORTURE_ELF, TOHOST_TORTURE)
         self._assert_pass(exc, TORTURE_ELF)
