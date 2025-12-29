@@ -1,0 +1,26 @@
+{
+  "memory_regions": [
+    {
+      "name": "flash",
+      "start": "0x00000000",
+      "end": "0x00010000",
+      "comment": "64KB Flash/ROM"
+    },
+    {
+      "name": "sram",
+      "start": "0x20000000",
+      "end": "0x20002000",
+      "comment": "8KB SRAM"
+    }
+  ],
+  "hw_stubs": {
+    "0x000a0084": {
+      "value": 16,
+      "comment": "Hardware register - bit 4 must be set for boot to proceed"
+    },
+    "0x01000000": {
+      "value": 0,
+      "comment": "Info page read - return 0 for now"
+    }
+  }
+}
