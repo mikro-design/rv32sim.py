@@ -52,6 +52,8 @@ addresses are discovered.
 
 python3 -m unittest discover -s tests
 
+The compliance harness runs all ELF binaries under `tests/elfs/`.
+
 ## Notes
 
 - Default memory regions are flash 0x00000000-0x00020000 and SRAM at
