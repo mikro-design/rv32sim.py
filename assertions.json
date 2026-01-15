@@ -1,0 +1,76 @@
+{
+  "assertions": {
+    "0x0008000c": {
+      "width": 4,
+      "register": "SYSCTRL.CKSEL",
+      "peripheral": "SYSCTRL",
+      "read": {
+        "value": "0x00000003"
+      }
+    },
+    "0x000a0078": {
+      "width": 4,
+      "register": "TOP_ULV.VMAINTHRESHOLD",
+      "peripheral": "TOP_ULV",
+      "read": {
+        "value": "0x000005c7"
+      }
+    },
+    "0x000a0084": {
+      "width": 4,
+      "register": "TOP_ULV.EXTWAKECTRL",
+      "peripheral": "TOP_ULV",
+      "read": {
+        "value": "0x00000010"
+      }
+    },
+    "0x000a00f4": {
+      "width": 4,
+      "register": "TOP_ULV.FLAGS",
+      "peripheral": "TOP_ULV",
+      "read": {
+        "value": "0x00000000"
+      }
+    },
+    "0x00180078": {
+      "width": 4,
+      "register": "PERIPHCTRL.RCOSCV4",
+      "peripheral": "PERIPHCTRL",
+      "read": {
+        "value": "0x00000000"
+      }
+    },
+    "0x00181024": {
+      "width": 4,
+      "register": "GPIO.IE",
+      "peripheral": "GPIO",
+      "read": {
+        "value": "0x00000000"
+      }
+    },
+    "0x00181028": {
+      "width": 4,
+      "register": "GPIO.PE",
+      "peripheral": "GPIO",
+      "read": {
+        "value": "0x00000000"
+      }
+    },
+    "0x0018103c": {
+      "width": 4,
+      "register": "GPIO.DS0",
+      "peripheral": "GPIO",
+      "read": {
+        "value": "0x00000000"
+      }
+    },
+    "0x00181040": {
+      "width": 4,
+      "register": "GPIO.DS1",
+      "peripheral": "GPIO",
+      "read": {
+        "value": "0x00000000"
+      }
+    }
+  }
+}

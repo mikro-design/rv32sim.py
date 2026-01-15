@@ -1,0 +1,19 @@
+{
+  "memif": {
+    "code": {
+      "module": "memif:FlatMemIf",
+      "config": {
+        "penalty": 0,
+        "count_misses": true
+      }
+    },
+    "data": {
+      "module": "memif:FlatMemIf",
+      "config": {
+        "penalty": 0
+      }
+    }
+  },
+  "hw_stubs": {},
+  "func_stubs": {}
+}

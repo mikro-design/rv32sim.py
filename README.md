@@ -15,6 +15,7 @@ python rv32sim.py tests/elfs/riscv-arch-test/I-add-01.elf --stub examples/hw_stu
 - GDB remote stub (default port 3333; use --port=PORT)
 - Hardware register stubbing and function stubs via JSON
 - Detect and assisted modes to generate stub templates
+- SVD-aware MMIO assertion assistant (interactive prompts + JSON replay)
 
 ## Layout
 
@@ -26,7 +27,7 @@ python rv32sim.py tests/elfs/riscv-arch-test/I-add-01.elf --stub examples/hw_stu
 
 ## Usage
 
-python rv32sim.py <program.elf> [--port=PORT] [--stub=FILE] [--detect|--assisted]
+python rv32sim.py <program.elf> [--port=PORT] [--stub=FILE] [--svd=FILE] [--assert=FILE|--assert-assist] [--detect|--assisted]
 
 The CLI starts a GDB server and waits for a debugger connection. Use GDB to run
 the program (see examples below or docs/usage.md).
@@ -43,6 +44,8 @@ addresses are discovered.
   python rv32sim.py tests/elfs/riscv-arch-test/I-add-01.elf --stub examples/hw_stubs.json
 - Generate a stub template from unknown MMIO:
   python rv32sim.py tests/elfs/riscv-torture/test.elf --detect
+- Build an assertion file with SVD hints:
+  python rv32sim.py program.elf --assert-assist --svd path/to/device.svd
 - Attach GDB (in another terminal):
   gdb-multiarch tests/elfs/riscv-tests/rv32ui-p-add
   (gdb) target remote :3333
@@ -67,5 +70,6 @@ CI splits the suite with `RV32SIM_SUITE`, `RV32SIM_CHUNK_COUNT`, and
 ## More docs
 
 - docs/hw-stubs.md
+- docs/assertions.md
 - docs/test-elfs.md
 - docs/usage.md

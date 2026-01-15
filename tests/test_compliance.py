@@ -32,7 +32,7 @@ def _align_up(value, align):
     return (value + align - 1) & ~(align - 1)
 
 
-def _load_range(path):
+def _read_elf(path):
     with open(path, "rb") as handle:
         elf = handle.read()
 
@@ -40,7 +40,82 @@ def _load_range(path):
         raise ValueError(f"Invalid ELF file: {path}")
     if elf[4] != 1 or elf[5] != 1:
         raise ValueError(f"Unsupported ELF class or endianness: {path}")
+    return elf
 
+
+def _read_cstr(blob, offset):
+    if blob is None or offset >= len(blob):
+        return None
+    end = blob.find(b"\x00", offset)
+    if end == -1:
+        end = len(blob)
+    return blob[offset:end].decode("ascii", errors="replace")
+
+
+def _iter_sections(elf):
+    e_shoff = struct.unpack_from("<I", elf, 32)[0]
+    e_shentsize, e_shnum, e_shstrndx = struct.unpack_from("<HHH", elf, 46)
+    if e_shoff == 0 or e_shnum == 0 or e_shentsize < 40:
+        return []
+    if e_shoff + e_shentsize * e_shnum > len(elf):
+        raise ValueError("Section headers extend beyond EOF")
+
+    shstr = None
+    if e_shstrndx < e_shnum:
+        shstr_off = e_shoff + e_shstrndx * e_shentsize
+        sh_name, sh_type, sh_flags, sh_addr, sh_offset, sh_size = struct.unpack_from(
+            "<IIIIII", elf, shstr_off
+        )
+        if sh_offset + sh_size <= len(elf):
+            shstr = elf[sh_offset:sh_offset + sh_size]
+
+    sections = []
+    for idx in range(e_shnum):
+        off = e_shoff + idx * e_shentsize
+        sh_name, sh_type, sh_flags, sh_addr, sh_offset, sh_size, sh_link, sh_info, sh_addralign, sh_entsize = (
+            struct.unpack_from("<IIIIIIIIII", elf, off)
+        )
+        sections.append({
+            "name": _read_cstr(shstr, sh_name),
+            "type": sh_type,
+            "addr": sh_addr,
+            "offset": sh_offset,
+            "size": sh_size,
+            "link": sh_link,
+            "entsize": sh_entsize,
+        })
+    return sections
+
+
+def _find_tohost_addr(elf):
+    sections = _iter_sections(elf)
+    for section in sections:
+        if section["name"] == ".tohost":
+            return section["addr"]
+
+    for section in sections:
+        if section["type"] != 2 or section["entsize"] < 16:
+            continue
+        link = section["link"]
+        if link >= len(sections):
+            continue
+        strtab = sections[link]
+        if strtab["offset"] + strtab["size"] > len(elf):
+            continue
+        names = elf[strtab["offset"]:strtab["offset"] + strtab["size"]]
+        for ent_off in range(section["offset"], section["offset"] + section["size"], section["entsize"]):
+            if ent_off + 16 > len(elf):
+                break
+            st_name, st_value, st_size, st_info, st_other, st_shndx = struct.unpack_from(
+                "<IIIBBH", elf, ent_off
+            )
+            name = _read_cstr(names, st_name)
+            if name == "tohost":
+                return st_value
+    return None
+
+
+def _load_range(elf, path):
     e_phoff = struct.unpack_from("<I", elf, 28)[0]
     e_phentsize, e_phnum = struct.unpack_from("<HH", elf, 42)
     if e_phentsize < 32:
@@ -89,7 +164,11 @@ def run_elf(path, tohost_addr, max_steps=MAX_STEPS):
     if not os.path.isfile(path):
         raise FileNotFoundError(path)
 
-    mem_start, mem_end = _load_range(path)
+    elf = _read_elf(path)
+    mem_start, mem_end = _load_range(elf, path)
+    elf_tohost = _find_tohost_addr(elf)
+    if elf_tohost is not None:
+        tohost_addr = elf_tohost
     if tohost_addr < mem_start:
         mem_start = _align_down(tohost_addr, PAGE_SIZE)
     if tohost_addr + 8 > mem_end:
@@ -110,8 +189,19 @@ def run_elf(path, tohost_addr, max_steps=MAX_STEPS):
             try:
                 sim.execute()
             except TrapException as exc:
-                # Emulate trap entry so compliance tests can run their handlers.
-                sim.pc = sim._raise_trap(exc.cause, exc.tval)
+                # Emulate trap entry; fall back to a stub if mtvec isn't mapped.
+                trap_pc = sim._raise_trap(exc.cause, exc.tval)
+                if trap_pc == 0 or sim.is_hardware_region(trap_pc):
+                    instr = sim.last_instr if sim.last_instr is not None else 0
+                    instr_size = 2 if (instr & 0x3) != 0x3 else 4
+                    mstatus = sim._csr_read(0x300)
+                    mpp = (mstatus >> 11) & 0x3
+                    sim.priv = mpp
+                    sim._csr_write(0x300, mstatus & ~0x1800)
+                    mepc = sim.csrs.get(0x341, sim.pc) & 0xffffffff
+                    sim.pc = (mepc + instr_size) & 0xffffffff
+                else:
+                    sim.pc = trap_pc
             except HaltException as exc:
                 return exc
             steps += 1

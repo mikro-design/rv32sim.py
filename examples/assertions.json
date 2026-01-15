@@ -1,0 +1,15 @@
+{
+  "assertions": {
+    "0x40000000": {
+      "width": 4,
+      "register": "UART0.DATA",
+      "read": {
+        "value": "0x00000000"
+      },
+      "write": {
+        "value": "0x00000041",
+        "mask": "0x000000ff"
+      }
+    }
+  }
+}

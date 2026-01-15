@@ -62,6 +62,37 @@ python rv32sim.py tests/elfs/riscv-torture/test.elf --assisted
 
 Stop the simulator with Ctrl-C to write the generated stub JSON.
 
+## Assertion modes (SVD-aware)
+
+Assertion mode prompts on MMIO accesses (reads/writes outside memory regions)
+and can save the interaction as JSON for later runs.
+
+Create an assertion file interactively:
+
+```bash
+python rv32sim.py program.elf --assert-assist --svd path/to/device.svd
+```
+
+Stop the simulator with Ctrl-C to write the assertion JSON
+(`program_assertions.json` by default, or set `--assert-out=FILE`).
+
+Run with a saved assertion file (strict MMIO checking):
+
+```bash
+python rv32sim.py program.elf --assert program_assertions.json --svd path/to/device.svd
+```
+
+Field details are printed for each access (SVD required). Input formats at the prompt:
+
+- Hex/decimal values (e.g. 0x1f, 31)
+- Field assignments when SVD is loaded (e.g. FIELD=0x3 or FIELD=ENUM)
+- `-` to ignore a read/write assertion
+
+Use `--assert-verbose` to show full descriptions and enum lists.
+Use `--assert-asm` to show the next 8 instructions around each MMIO access.
+By default, MMIO writes are recorded into an in-memory register map and do not
+prompt; pass `--assert-writes` to enforce write checks.
+
 ## Using as a Python module
 
 You can embed the simulator directly:
