@@ -21,7 +21,7 @@ It is designed for educational purposes, emulator development, and testing basic
 
 ## Installation
 
-No special installation is required other than Python 3.6+.
+No special installation is required other than Python 3.7+.
 
 1.  **Clone the repository:**
     ```bash
@@ -44,10 +44,17 @@ cd ..
 ```
 
 ### 2. Running Tests
-You can run the automated test suite to verify everything is working:
+You can run the automated test suite to verify everything is working (requires `pytest`):
 
 ```bash
+python3 -m pip install pytest
 make test
+```
+
+If you have a RISC-V toolchain installed, you can also run the example-driven integration tests:
+
+```bash
+make test-examples
 ```
 
 ### 2. Running the Simulator
@@ -141,4 +148,4 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
-[MIT License](LICENSE)
+[BSD 3-Clause License](LICENSE)

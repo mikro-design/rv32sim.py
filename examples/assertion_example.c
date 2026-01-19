@@ -10,7 +10,7 @@ int main() {
     volatile uint32_t status = UART_CTRL;
     
     // Write 'A' to DATA register
-    // This matches the assertions.json example
+    // This matches the assertion JSON snippet in the docs
     UART_DATA = 0x41;
     
     // Write to CTRL register

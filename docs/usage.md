@@ -33,6 +33,8 @@ Used for verifying driver behavior.
 *   **`--assert-assist`**: An interactive mode to help build assertion files. It prompts you when MMIO accesses occur, allowing you to define rules on the fly.
 *   **`--assert-verbose`**: Prints detailed information about fields if an SVD file is loaded.
 *   **`--svd=FILE`**: Loads a CMSIS-SVD (System View Description) file. This allows the simulator to display human-readable register and field names instead of raw addresses.
+*   **`--run`**: Starts executing immediately instead of waiting for a GDB connection.
+*   **`--uart-input=STRING`**: Preloads the UART RX buffer (supports `\n`).
 
 ### Memory Configuration
 

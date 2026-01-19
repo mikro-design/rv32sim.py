@@ -1,0 +1,16 @@
+{
+  "memory_regions": [
+    {"name": "flash", "start": "0x00000000", "end": "0x00020000"},
+    {"name": "sram", "start": "0x20000000", "end": "0x21000000"}
+  ],
+  "hw_stubs": {
+    "0x10000000": {"value": 0, "width": 4},
+    "0x10000004": {"sequence": [0, 1, 1, 2], "repeat": true}
+  },
+  "func_stubs": {
+    "0x00001234": 0
+  },
+  "tohost_addr": "0x80001000",
+  "tohost_size": 8,
+  "fromhost_addr": "0x80001008"
+}

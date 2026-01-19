@@ -31,6 +31,24 @@ riscv32-unknown-elf-gdb examples/debug_example.elf \
 
 The simulator needs to know the assertions *before* the code runs to validate the MMIO writes.
 
+Create `examples/assertions.json` with the following contents:
+
+```json
+{
+  "assertions": {
+    "0x40000000": {
+      "register": "UART_DATA",
+      "write": { "value": "0x41", "mask": "0xFF" }
+    },
+    "0x40000004": {
+      "register": "UART_CTRL",
+      "read": { "value": "0x0" },
+      "write": { "value": "0x1", "mask": "0x1" }
+    }
+  }
+}
+```
+
 **Terminal 1 (Simulator):**
 ```bash
 python3 rv32sim.py --port 3333 --assert examples/assertions.json --assert-writes

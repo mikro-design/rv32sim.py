@@ -4,6 +4,29 @@ import sys
 import os
 import signal
 
+_ASSERTIONS_JSON = '''{
+  "assertions": {
+    "0x40000000": {
+      "register": "UART_DATA",
+      "write": { "value": "0x41", "mask": "0xFF" }
+    },
+    "0x40000004": {
+      "register": "UART_CTRL",
+      "read": { "value": "0x0" },
+      "write": { "value": "0x1", "mask": "0x1" }
+    }
+  }
+}'''
+
+
+def _ensure_assertions_file(path):
+    if os.path.exists(path):
+        return False
+    with open(path, "w") as f:
+        f.write(_ASSERTIONS_JSON)
+    return True
+
+
 def run_gdb_load_demo(elf_name, sim_args=[], gdb_cmds=[]):
     print(f"\n{'='*60}")
     print(f"DEMO: Loading {elf_name} via GDB")
@@ -79,14 +102,20 @@ break main
         if os.path.exists("demo.gdb"):
             os.remove("demo.gdb")
 
+
 if __name__ == "__main__":
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
+    assertions_path = "assertions_demo.json"
+    created = _ensure_assertions_file(assertions_path)
+    try:
+        # Demo 1: Simple Debug
+        run_gdb_load_demo("debug_example.elf", 
+                          gdb_cmds=["continue", "print a", "print b"])
 
-    # Demo 1: Simple Debug
-    run_gdb_load_demo("debug_example.elf", 
-                      gdb_cmds=["continue", "print a", "print b"])
-
-    # Demo 2: Assertions (Sim must be configured with --assert before load)
-    run_gdb_load_demo("assertion_example.elf", 
-                      sim_args=["--assert", "assertions.json", "--assert-writes"],
-                      gdb_cmds=["continue"]) # logic runs and exits
+        # Demo 2: Assertions (Sim must be configured with --assert before load)
+        run_gdb_load_demo("assertion_example.elf", 
+                          sim_args=["--assert", assertions_path, "--assert-writes"],
+                          gdb_cmds=["continue"]) # logic runs and exits
+    finally:
+        if created and os.path.exists(assertions_path):
+            os.remove(assertions_path)

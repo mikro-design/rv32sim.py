@@ -54,7 +54,7 @@ When `--assert-assist` is enabled:
 
 Stop the simulator with Ctrl-C to write the assertion JSON.
 
-See `examples/assertions.json` for a minimal starter file.
+Use the example JSON above as a starter and save it as `assertions.json`.
 
 Note: SVD parsing is best-effort (direct registers/fields/enums). Derived
 definitions may require manual overrides.

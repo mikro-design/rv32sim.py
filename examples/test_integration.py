@@ -30,44 +30,59 @@ def print_header(name):
 
 def run_assertion_test():
     print_header("Assertions (MMIO Validation)")
-    
-    # 1. Run Passing Case
-    print("[1/2] Running Valid Assertion Case...")
-    # Add --run to actually execute code
-    cmd = RV32SIM + ["assertion_example.elf", "--assert", "assertions.json", "--assert-writes", "--run"]
-    print(f"CMD: {' '.join(cmd)}")
 
-    
-    # We expect this to run and exit (the example loops forever, so we run for a bit then kill)
-    # Actually assertion_example.c returns 0.
-    
-    try:
-        # run with a timeout
-        p = subprocess.run(cmd, capture_output=True, text=True, timeout=3)
-        output = (p.stdout or "") + (p.stderr or "")
-        print("OUTPUT (Last 5 lines):")
-        print('\n'.join(output.splitlines()[-5:]))
-        
-        # Check output for assertion failure
-        if p.returncode != 0 or "[ASSERT]" in output:
-            print("FAILURE: Assertions triggered unexpectedly.")
-            return False
-            
-        print("SUCCESS: Valid logic passed assertions.")
-        
-    except subprocess.TimeoutExpired:
-        # If it timed out, it might be stuck in a loop or just slow. 
-        # assertion_example.c ends with return 0, so it should exit.
-        print("WARNING: Timed out. Did the program finish?")
-
-    # 2. Run Failing Case (We need to modify the binary or use a strict assertion that fails)
-    # Let's verify that a bad write IS caught.
-    # We will use a temporary assertion file that expects a different value.
-    
-    print("\n[2/2] Running Invalid Assertion Case...")
+    pass_json = "assertions_pass.json"
     bad_json = "assertions_fail.json"
-    with open(bad_json, "w") as f:
-        f.write('''{
+    try:
+        with open(pass_json, "w") as f:
+            f.write('''{
+  "assertions": {
+    "0x40000000": {
+      "register": "UART_DATA",
+      "write": { "value": "0x41", "mask": "0xFF" }
+    },
+    "0x40000004": {
+      "register": "UART_CTRL",
+      "read": { "value": "0x0" },
+      "write": { "value": "0x1", "mask": "0x1" }
+    }
+  }
+}''')
+    
+        # 1. Run Passing Case
+        print("[1/2] Running Valid Assertion Case...")
+        # Add --run to actually execute code
+        cmd = RV32SIM + ["assertion_example.elf", "--assert", pass_json, "--assert-writes", "--run"]
+        print(f"CMD: {' '.join(cmd)}")
+
+        # We expect this to run and exit (the example loops forever, so we run for a bit then kill)
+        # Actually assertion_example.c returns 0.
+        try:
+            # run with a timeout
+            p = subprocess.run(cmd, capture_output=True, text=True, timeout=3)
+            output = (p.stdout or "") + (p.stderr or "")
+            print("OUTPUT (Last 5 lines):")
+            print('\n'.join(output.splitlines()[-5:]))
+            
+            # Check output for assertion failure
+            if p.returncode != 0 or "[ASSERT]" in output:
+                print("FAILURE: Assertions triggered unexpectedly.")
+                return False
+                
+            print("SUCCESS: Valid logic passed assertions.")
+            
+        except subprocess.TimeoutExpired:
+            # If it timed out, it might be stuck in a loop or just slow. 
+            # assertion_example.c ends with return 0, so it should exit.
+            print("WARNING: Timed out. Did the program finish?")
+
+        # 2. Run Failing Case (We need to modify the binary or use a strict assertion that fails)
+        # Let's verify that a bad write IS caught.
+        # We will use a temporary assertion file that expects a different value.
+        
+        print("\n[2/2] Running Invalid Assertion Case...")
+        with open(bad_json, "w") as f:
+            f.write('''{
   "assertions": {
     "0x40000000": {
       "register": "UART_DATA",
@@ -80,33 +95,34 @@ def run_assertion_test():
     }
   }
 }''')
-    
-    cmd = RV32SIM + ["assertion_example.elf", "--assert", bad_json, "--assert-writes", "--run"]
-    print(f"CMD: {' '.join(cmd)}")
-    
-    try:
-        p = subprocess.run(cmd, capture_output=True, text=True, timeout=3)
-        output = (p.stdout or "") + (p.stderr or "")
-        if "[ASSERT]" in output:
-            print("SUCCESS: Caught invalid write as expected.")
-            assert_lines = [line for line in output.splitlines() if "[ASSERT]" in line]
-            if assert_lines:
-                print(f"LOG: {assert_lines[0]}")
-        else:
-            print("FAILURE: Simulator did not report assertion failure.")
-            if output.strip():
-                print(output)
+        
+        cmd = RV32SIM + ["assertion_example.elf", "--assert", bad_json, "--assert-writes", "--run"]
+        print(f"CMD: {' '.join(cmd)}")
+        
+        try:
+            p = subprocess.run(cmd, capture_output=True, text=True, timeout=3)
+            output = (p.stdout or "") + (p.stderr or "")
+            if "[ASSERT]" in output:
+                print("SUCCESS: Caught invalid write as expected.")
+                assert_lines = [line for line in output.splitlines() if "[ASSERT]" in line]
+                if assert_lines:
+                    print(f"LOG: {assert_lines[0]}")
             else:
-                print(f"Return code: {p.returncode}")
+                print("FAILURE: Simulator did not report assertion failure.")
+                if output.strip():
+                    print(output)
+                else:
+                    print(f"Return code: {p.returncode}")
+                return False
+        except subprocess.TimeoutExpired:
+            print("FAILURE: Timed out waiting for assertion failure.")
             return False
-    except subprocess.TimeoutExpired:
-        print("FAILURE: Timed out waiting for assertion failure.")
-        return False
-    finally:
-        if os.path.exists(bad_json):
-            os.remove(bad_json)
 
-    return True
+        return True
+    finally:
+        for path in (pass_json, bad_json):
+            if os.path.exists(path):
+                os.remove(path)
 
 def run_gdb_test():
     print_header("GDB Debugging (Step, Break, Read Mem)")

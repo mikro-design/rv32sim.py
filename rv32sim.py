@@ -197,7 +197,7 @@ class RV32Sim:
         return (val & -val).bit_length() - 1
 
     def _cpop32(self, val):
-        return (val & 0xffffffff).bit_count()
+        return bin(val & 0xffffffff).count("1")
 
     def _is_power_of_two(self, value):
         return value > 0 and (value & (value - 1)) == 0
@@ -953,6 +953,8 @@ if __name__ == "__main__":
             print("  --mem-region=START:SIZE[:NAME]  Add a RAM region to the memory map")
             print("  --detect         Enable hardware access detection mode")
             print("  --assisted       Interactive mode - reports each new hardware access with hints")
+            print("  --run            Run immediately without waiting for GDB")
+            print("  --uart-input=STRING  Preload UART RX buffer (\\n supported)")
             sys.exit(0)
         elif arg.startswith("-"):
             print(f"Unknown option: {arg}")
@@ -1066,3 +1068,7 @@ if __name__ == "__main__":
             # Save detected hardware accesses to a config template
             config_name = f"{elf_file.replace('.elf', '')}_hw_stubs.json" if elf_file else "hw_stubs.json"
             sim.save_hw_accesses(config_name)
+
+# Local Variables:
+# eval: (blacken-mode)
+# End:

@@ -32,7 +32,23 @@ make
 
 ## Example 2: Assertions (MMIO Validation)
 
-`assertion_example.c` writes to specific memory addresses (UART peripheral). `assertions.json` defines expected values.
+`assertion_example.c` writes to specific memory addresses (UART peripheral). Create an assertion file in this directory (save as `assertions.json`):
+
+```json
+{
+  "assertions": {
+    "0x40000000": {
+      "register": "UART_DATA",
+      "write": { "value": "0x41", "mask": "0xFF" }
+    },
+    "0x40000004": {
+      "register": "UART_CTRL",
+      "read": { "value": "0x0" },
+      "write": { "value": "0x1", "mask": "0x1" }
+    }
+  }
+}
+```
 
 1.  **Run:**
     ```bash
