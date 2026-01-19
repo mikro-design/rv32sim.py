@@ -25,8 +25,8 @@ No special installation is required other than Python 3.7+.
 
 1.  **Clone the repository:**
     ```bash
-    git clone https://github.com/yourusername/rv32sim.git
-    cd rv32sim
+    git clone https://github.com/mikro-design/rv32sim.py.git
+    cd rv32sim.py
     ```
 
 2.  **Dependencies:**
