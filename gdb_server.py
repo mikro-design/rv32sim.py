@@ -56,6 +56,7 @@ class GDBServer:
         self.client = None
         self.running = False
         self._server_socket = None
+        self._pending_stop_reply = None
 
     def start(self, port=None):
         if self.running:
@@ -79,6 +80,13 @@ class GDBServer:
         if self._server_socket:
             safe_close(self._server_socket)
             self._server_socket = None
+
+    def notify_exit(self, exc):
+        self._pending_stop_reply = self._stop_reply_from_exception(exc)
+        self.running = False
+        if self.client:
+            safe_close(self.client)
+            self.client = None
 
     def _ensure_write_region(self, addr, length):
         if length <= 0:
@@ -109,7 +117,15 @@ class GDBServer:
             messages,
             client_setter=lambda client: setattr(self, "client", client),
             server_setter=lambda server: setattr(self, "_server_socket", server),
+            configure_client=self._configure_client,
         )
+        self._pending_stop_reply = None
+
+    def _configure_client(self, client):
+        try:
+            client.setsockopt(socket.SOL_SOCKET, socket.SO_OOBINLINE, 1)
+        except Exception:
+            pass
 
     def _escape_rsp(self, data):
         escaped = []
@@ -399,13 +415,26 @@ class GDBServer:
         if stop_reply is None:
             stop_reply = "S05"
         self._send_packet(stop_reply)
+        if stop_reply.startswith("W"):
+            self.sim._skip_breakpoint_once = False
+            self.running = False
+            if self.client:
+                safe_close(self.client)
+                self.client = None
 
     def _handle_step(self):
         try:
             self.sim.execute()
             return "S05"
         except Exception as e:
-            return self._stop_reply_from_exception(e)
+            stop_reply = self._stop_reply_from_exception(e)
+            if stop_reply.startswith("W"):
+                self.sim._skip_breakpoint_once = False
+                self.running = False
+                if self.client:
+                    safe_close(self.client)
+                    self.client = None
+            return stop_reply
 
     def _handle_breakpoint(self, pkt):
         try:
@@ -462,9 +491,16 @@ class GDBServer:
         if not self.client:
             return False
         try:
-            ready, _, _ = select.select([self.client], [], [], 0)
+            ready, _, exceptional = select.select([self.client], [], [self.client], 0)
         except Exception:
             return False
+        if self.client in exceptional:
+            try:
+                data = self.client.recv(1, socket.MSG_OOB)
+            except Exception:
+                data = b""
+            if data == b"\x03":
+                return True
         if not ready:
             return False
         try:
@@ -482,7 +518,18 @@ class GDBServer:
         return False
 
     def _stop_reply_from_exception(self, exc):
+        if getattr(exc, "reason", None) == "exit":
+            code = getattr(exc, "code", 0)
+            if code is None:
+                code = 0
+            return f"W{int(code) & 0xff:02x}"
         msg = str(exc)
+        if msg.startswith("exit:"):
+            try:
+                code = int(msg.split(":", 1)[1].strip(), 0) & 0xff
+            except Exception:
+                code = 0
+            return f"W{code:02x}"
         if "Program exited with code" in msg:
             try:
                 code = int(msg.split("code", 1)[1].strip().split()[0], 0) & 0xff
@@ -552,6 +599,10 @@ class GDBServer:
                     reply = ""
 
             elif pkt == "c":
+                if self._pending_stop_reply:
+                    self._send_packet(self._pending_stop_reply)
+                    self._pending_stop_reply = None
+                    continue
                 self._handle_continue()
                 continue
 

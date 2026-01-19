@@ -1,75 +1,144 @@
-# rv32sim
+# rv32sim: A Python-based RV32I Simulator with GDB Stub
 
-RV32IMC simulator with a GDB remote stub. It loads ELF32 little-endian RISC-V
-binaries, supports MMIO stubs via JSON, and can detect unknown hardware
-accesses.
+`rv32sim` is a lightweight, extensible RISC-V 32-bit simulator written in Python. It implements the RV32I base integer instruction set (plus M and partial C extensions) and features a built-in GDB remote stub, allowing you to debug bare-metal RISC-V programs using standard tools.
 
-## Quick start
-
-python rv32sim.py tests/elfs/riscv-arch-test/I-add-01.elf --stub examples/hw_stubs.json
+It is designed for educational purposes, emulator development, and testing basic bare-metal software without the overhead of heavy simulation environments like QEMU.
 
 ## Features
 
-- ELF32 loader for RISC-V
-- RV32I core with M and partial C (compressed) support
-- GDB remote stub (default port 3333; use --port=PORT)
-- Hardware register stubbing and function stubs via JSON
-- Detect and assisted modes to generate stub templates
-- SVD-aware MMIO assertion assistant (interactive prompts + JSON replay)
+*   **RV32IMC Support:** Implements the base RV32I instruction set, standard multiplication/division (M) extension, and common compressed (C) instructions.
+*   **GDB Remote Stub:** Acts as a GDB server (RSP protocol), allowing connection from `gdb-multiarch` or `riscv32-unknown-elf-gdb`.
+    *   Support for breakpoints, stepping, register/memory inspection, and modification.
+*   **MMIO & Hardware Stubbing:**
+    *   Define hardware peripherals and registers via JSON configuration.
+    *   **Detect Mode:** Automatically record unknown MMIO accesses to generate stub templates.
+    *   **Assisted Mode:** Interactive prompts for discovering and handling new hardware accesses.
+*   **Assertion Engine:**
+    *   Validate MMIO writes against expected values or bitmasks defined in JSON.
+    *   Useful for regression testing of driver code.
+*   **RTT (Real Time Transfer):** Basic support for SEGGER RTT-like communication.
+*   **Extensible Memory Map:** Configurable memory regions (Flash, SRAM) via CLI or JSON.
 
-## Layout
+## Installation
 
-- rv32sim.py: simulator and GDB stub
-- examples/hw_stubs.json: sample stub configuration
-- tests/test_rv32sim.py: unit tests
-- tests/elfs/: ELF binaries from RISC-V test suites
-- third_party/: upstream licenses for included test binaries
+No special installation is required other than Python 3.6+.
 
-## Usage
+1.  **Clone the repository:**
+    ```bash
+    git clone https://github.com/yourusername/rv32sim.git
+    cd rv32sim
+    ```
 
-python rv32sim.py <program.elf> [--port=PORT] [--stub=FILE] [--svd=FILE] [--assert=FILE|--assert-assist] [--detect|--assisted]
+2.  **Dependencies:**
+    Standard Python libraries are used. `svd_parser` is included or required if you use SVD features.
 
-The CLI starts a GDB server and waits for a debugger connection. Use GDB to run
-the program (see examples below or docs/usage.md).
+## Quick Start
 
-When --detect is enabled, the simulator records unknown MMIO accesses and
-writes a stub template on exit. Assisted mode prints hints as new MMIO
-addresses are discovered.
+### 1. Compiling a Program
+You need a RISC-V toolchain. See `examples/` for a sample `Makefile`.
 
-## Examples
+```bash
+cd examples
+make
+cd ..
+```
 
-- Run a small ISA test:
-  python rv32sim.py tests/elfs/riscv-tests/rv32ui-p-add
-- Run with a stub config:
-  python rv32sim.py tests/elfs/riscv-arch-test/I-add-01.elf --stub examples/hw_stubs.json
-- Generate a stub template from unknown MMIO:
-  python rv32sim.py tests/elfs/riscv-torture/test.elf --detect
-- Build an assertion file with SVD hints:
-  python rv32sim.py program.elf --assert-assist --svd path/to/device.svd
-- Attach GDB (in another terminal):
-  gdb-multiarch tests/elfs/riscv-tests/rv32ui-p-add
-  (gdb) target remote :3333
-  (gdb) continue
+### 2. Running Tests
+You can run the automated test suite to verify everything is working:
 
-## Testing
+```bash
+make test
+```
 
-python3 -m unittest discover -s tests
+### 2. Running the Simulator
+Run the simulator (starts empty, waiting for GDB):
 
-The compliance harness runs all ELF binaries under `tests/elfs/`.
-CI splits the suite with `RV32SIM_SUITE`, `RV32SIM_CHUNK_COUNT`, and
-`RV32SIM_CHUNK_INDEX` (optionally `RV32SIM_MAX_STEPS`).
+```bash
+python3 rv32sim.py
+```
+The simulator will start and wait for a GDB connection on port 3333.
 
-## Notes
+### 3. Connecting GDB
+In a separate terminal:
 
-- Default memory regions are flash 0x00000000-0x00020000 and SRAM at
-  0x20000000 with size set by memory_size (default 16 MB). You can override
-  with memory_regions in the stub JSON.
-- Some compressed instructions are not implemented and will raise an error
-  if encountered.
+```bash
+riscv32-unknown-elf-gdb examples/debug_example.elf
+(gdb) target remote :3333
+(gdb) load
+(gdb) break main
+(gdb) continue
+```
 
-## More docs
+## detailed Usage
 
-- docs/hw-stubs.md
-- docs/assertions.md
-- docs/test-elfs.md
-- docs/usage.md
+```
+python3 rv32sim.py [program.elf] [OPTIONS]
+```
+
+### Options
+*   `--port=PORT`: GDB server port (default: 3333).
+*   `--stub=FILE`: Load hardware register stubs from a JSON file.
+*   `--detect`: Enable hardware access detection. Captures unknown MMIO R/W and saves them to `hw_stubs.json` on exit.
+*   `--assisted`: Interactive mode that pauses on unknown MMIO and suggests stubs.
+*   `--mem-region=START:SIZE[:NAME]`: Add custom memory regions (e.g., `--mem-region=0x80000000:0x10000:dram`).
+*   `--assert=FILE`: Load MMIO assertions from a JSON file.
+*   `--assert-writes`: Check writes against assertions (default is to only track).
+*   `--svd=FILE`: Load a CMSIS-SVD file to provide human-readable register names during simulation/assertion.
+*   `--uart-input=STRING`: Pre-load UART RX buffer with a string (supports \n).
+
+## Configuration Files
+
+### Hardware Stubs (`hw_stubs.json`)
+Used to mock hardware registers so firmware doesn't hang waiting for status bits.
+
+```json
+{
+  "hw_stubs": {
+    "0x40000000": 1,        // Return 1 when reading 0x40000000
+    "0x50000004": {
+      "value": "0xDEADBEEF",
+      "comment": "Status register"
+    }
+  }
+}
+```
+
+### Assertions (`assertions.json`)
+Used to verify that the software interacts with hardware correctly.
+
+```json
+{
+  "assertions": {
+    "0x40000000": {
+      "register": "UART_TX",
+      "write": {
+        "mask": "0xFF",     // Only check lower 8 bits
+        "value": "0x41"     // Expect 'A' to be written
+      }
+    }
+  }
+}
+```
+
+## Architecture
+
+*   **`rv32sim.py`**: Entry point. Manages the simulation loop, GDB server, and CLI arguments.
+*   **`cpu_core.py`**: Implements the CPU logic (fetch, decode, execute) and instruction handlers.
+*   **`memory_map.py`**: Handles memory regions (RAM/ROM) and routing.
+*   **`mmio.py`**: Manages Memory Mapped I/O, hooks, and stubs.
+*   **`gdb_server.py`**: Implements the GDB Remote Serial Protocol (RSP).
+*   **`assertion_manager.py`**: Handles checking of memory accesses against defined rules.
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+1.  Fork the repo.
+2.  Create your feature branch (`git checkout -b my-new-feature`).
+3.  Commit your changes (`git commit -am 'Add some feature'`).
+4.  Push to the branch (`git push origin my-new-feature`).
+5.  Create a new Pull Request.
+
+## License
+
+[MIT License](LICENSE)

@@ -14,6 +14,7 @@ from memory_map import MemoryMap
 from mmio import MMIOManager
 from rtt_server import RTTServer
 from memif import FlatMemIf, load_memif
+from simple_uart import SimpleUART
 
 
 _CSR_COUNTER_SPECS = {
@@ -141,6 +142,13 @@ class RV32Sim:
         try:
             self.execute()
             return True
+        except HaltException as exc:
+            if self.gdb_server:
+                try:
+                    self.gdb_server.notify_exit(exc)
+                except Exception:
+                    pass
+            raise
         except Exception as e:
             print(f"[SIM] Execution stopped: {e}")
             return False
@@ -773,6 +781,7 @@ class RV32Sim:
 
     def _halt(self, reason, code=None):
         self.halt_reason = reason
+        self.exit_code = code
         raise HaltException(reason, code)
 
     def _raise_trap(self, cause, tval=0):
@@ -834,6 +843,8 @@ if __name__ == "__main__":
     rtt_port = None
     rtt_cmd_port = None
     mem_regions = []
+    uart_input = None
+    run_immediately = False
 
     args = sys.argv[1:]
     def _next_value(flag):
@@ -914,9 +925,15 @@ if __name__ == "__main__":
             assert_output = _next_value("--assert-out")
         elif arg == "--detect":
             detect_mode = True
+        elif arg.startswith("--uart-input="):
+            uart_input = arg.split("=", 1)[1]
+        elif arg == "--uart-input":
+            uart_input = _next_value("--uart-input")
         elif arg == "--assisted":
             assisted_mode = True
             detect_mode = True  # Assisted mode implies detect mode
+        elif arg == "--run":
+            run_immediately = True
         elif arg in ("-h", "--help"):
             print("Usage: python rv32sim.py [program.elf] [OPTIONS]")
             print("Options:")
@@ -952,11 +969,15 @@ if __name__ == "__main__":
 
     sim = RV32Sim(gdb_port=gdb_port, detect_mode=detect_mode, assisted_mode=assisted_mode)
 
-    def uart_write(val):
-        if 32 <= val < 127 or val in '\n\r\t'.encode():
-            print(chr(val), end="", flush=True)
-    sim.register_write_handler(0x10000000, uart_write)
+    # Initialize Simple UART
+    uart = SimpleUART(sim, base=0x10000000)
+    if uart_input:
+        uart.queue_input(uart_input)
 
+    # Legacy basic write handler kept for backward compatibility if needed, 
+    # but SimpleUART covers 0x10000000 now. 
+    # The register_write_handler in SimpleUART overwrites previous handlers for specific addresses.
+    
     if svd_file:
         sim.load_svd(svd_file)
 
@@ -1010,6 +1031,23 @@ if __name__ == "__main__":
         sim.start_rtt_server(rtt_port)
     if rtt_cmd_port is not None:
         sim.start_rtt_cmd_server(rtt_cmd_port)
+
+    if run_immediately:
+        print("[SIM] Running immediately...")
+        try:
+            while True:
+                sim.step()
+                # Yield to other threads occasionally if needed, though GIL handles it
+                # time.sleep(0.0001) 
+        except HaltException as e:
+            print(f"[SIM] Halted: {e}")
+            sim.stop_gdb_server()
+            sim.stop_rtt_server()
+            sim.stop_rtt_cmd_server()
+            sys.exit(0 if e.code == 0 else 1)
+        except Exception as e:
+            print(f"[SIM] Error: {e}")
+            sys.exit(1)
 
     try:
         while True:

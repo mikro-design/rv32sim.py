@@ -1,107 +1,98 @@
-# Usage guide
+# rv32sim Usage Guide
 
-rv32sim can be used in two ways:
+This document provides detailed information on how to use `rv32sim` effectively.
 
-1) As a CLI that starts a GDB remote server.
-2) As a Python module you drive directly.
+## Command Line Interface
 
-## CLI (GDB remote)
-
-Start the simulator and load an ELF:
-
+The general syntax is:
 ```bash
-python rv32sim.py tests/elfs/riscv-tests/rv32ui-p-add
+python rv32sim.py [program.elf] [OPTIONS]
 ```
 
-This starts a GDB server on port 3333 and waits for a debugger connection. In
-another terminal:
+If no ELF file is provided, the simulator starts with empty memory (useful if you plan to `load` via GDB).
 
-```bash
-gdb-multiarch tests/elfs/riscv-tests/rv32ui-p-add
-```
+### GDB Server Options
 
-```gdb
-(gdb) target remote :3333
-(gdb) continue
-```
+*   **`--port=PORT`**: Sets the TCP port for the GDB server. Default is `3333`.
+    *   Example: `--port=1234`
 
-Common GDB commands:
+### Hardware Stubbing & Detection
 
-- stepi: execute one instruction
-- info registers: show register state
-- x/16wx 0x20000000: inspect memory
+These options help you run firmware that expects specific hardware peripherals.
 
-If you do not have gdb-multiarch, use a RISC-V capable gdb build and point it
-at the ELF.
+*   **`--stub=FILE`**: Loads a JSON file defining values for specific memory addresses. This is crucial for bypassing hardware initialization loops (e.g., waiting for a PLL lock bit).
+*   **`--detect`**: Runs the simulator in "detection mode". Any access to memory not defined in `memory_regions` is logged. On exit, a `hw_stubs.json` file is generated containing these accesses, which you can then edit and use as a stub file.
+*   **`--assisted`**: An interactive version of detect mode. When an unknown MMIO access occurs, the simulator pauses and prints details (PC, address, access type).
 
-## Stub configuration
+### Assertions
 
-Many ELFs expect MMIO registers. Use a stub config to define memory regions and
-MMIO behavior:
+Used for verifying driver behavior.
 
-```bash
-python rv32sim.py tests/elfs/riscv-arch-test/I-add-01.elf --stub examples/hw_stubs.json
-```
+*   **`--assert=FILE`**: Loads an assertion configuration file.
+*   **`--assert-writes`**: By default, assertions might just be monitored. This flag enforces them, stopping or reporting errors on writes.
+*   **`--assert-assist`**: An interactive mode to help build assertion files. It prompts you when MMIO accesses occur, allowing you to define rules on the fly.
+*   **`--assert-verbose`**: Prints detailed information about fields if an SVD file is loaded.
+*   **`--svd=FILE`**: Loads a CMSIS-SVD (System View Description) file. This allows the simulator to display human-readable register and field names instead of raw addresses.
 
-See docs/hw-stubs.md for the full JSON format.
+### Memory Configuration
 
-## Detect and assisted modes
+*   **`--mem-region=START:SIZE[:NAME]`**: Adds a RAM region.
+    *   `START`: Hex or decimal start address.
+    *   `SIZE`: Size in bytes.
+    *   `NAME`: Optional name (e.g., `sram`, `dram`).
+    *   Example: `--mem-region=0x20000000:0x8000:sram` (32KB SRAM at 0x20000000).
 
-Use detect mode to discover unknown MMIO addresses and generate a stub
-template on exit:
+## GDB Usage Tips
 
-```bash
-python rv32sim.py tests/elfs/riscv-torture/test.elf --detect
-```
+Once connected to the simulator via `target remote :3333`:
 
-Assisted mode is the same but prints hints when new MMIO addresses are seen:
+*   **`load`**: Uploads the ELF file sections to the simulator's memory. This is often required even if you provided the ELF on the command line, to ensure the CPU state is reset and memory is fresh.
+*   **`monitor reset_counter`**: Resets the internal cycle and instruction counters.
+*   **`monitor show_stats`**: Displays execution statistics (cycle count, instruction count).
+*   **`monitor run_steps N`**: Executes N instructions and stops.
+*   **`monitor load_elf PATH`**: Loads a new ELF file at runtime.
 
-```bash
-python rv32sim.py tests/elfs/riscv-torture/test.elf --assisted
-```
+## Stubbing Workflow
 
-Stop the simulator with Ctrl-C to write the generated stub JSON.
+1.  **Initial Run:** Run your firmware with `--detect`.
+    ```bash
+    python rv32sim.py firmware.elf --detect
+    ```
+2.  **Generate Stubs:** Interact with the firmware until it crashes or you exit. A `hw_stubs.json` (or similar name based on ELF) will be created.
+3.  **Refine Stubs:** Edit the generated JSON.
+    *   Change values from `0` to whatever the firmware expects (e.g., `0x1` for a "ready" bit).
+    *   Add comments.
+4.  **Run with Stubs:**
+    ```bash
+    python rv32sim.py firmware.elf --stub hw_stubs.json
+    ```
 
-## Assertion modes (SVD-aware)
+## Assertion Workflow
 
-Assertion mode prompts on MMIO accesses (reads/writes outside memory regions)
-and can save the interaction as JSON for later runs.
+1.  **Assist Mode:** Run with `--assert-assist` and optionally `--svd` for better context.
+    ```bash
+    python rv32sim.py firmware.elf --assert-assist --svd device.svd
+    ```
+2.  **Define Rules:** As the firmware runs, the CLI will prompt you on MMIO accesses. You can specify:
+    *   Expected values.
+    *   Bitmasks (which bits matter).
+    *   Sequences (for reading a FIFO or status change).
+3.  **Save:** On exit, an assertion JSON file is saved.
+4.  **Verify:** Run future regressions with:
+    ```bash
+    python rv32sim.py firmware.elf --assert assertions.json --assert-writes
+    ```
 
-Create an assertion file interactively:
+## Python API Usage
 
-```bash
-python rv32sim.py program.elf --assert-assist --svd path/to/device.svd
-```
-
-Stop the simulator with Ctrl-C to write the assertion JSON
-(`program_assertions.json` by default, or set `--assert-out=FILE`).
-
-Run with a saved assertion file (strict MMIO checking):
-
-```bash
-python rv32sim.py program.elf --assert program_assertions.json --svd path/to/device.svd
-```
-
-Field details are printed for each access (SVD required). Input formats at the prompt:
-
-- Hex/decimal values (e.g. 0x1f, 31)
-- Field assignments when SVD is loaded (e.g. FIELD=0x3 or FIELD=ENUM)
-- `-` to ignore a read/write assertion
-
-Use `--assert-verbose` to show full descriptions and enum lists.
-Use `--assert-asm` to show the next 8 instructions around each MMIO access.
-By default, MMIO writes are recorded into an in-memory register map and do not
-prompt; pass `--assert-writes` to enforce write checks.
-
-## Using as a Python module
-
-You can embed the simulator directly:
+You can embed the simulator directly in Python scripts:
 
 ```python
 from rv32sim import RV32Sim, HaltException
 
 sim = RV32Sim()
 sim.load_elf("tests/elfs/riscv-tests/rv32ui-p-add")
+# Initialize stack pointer if not set by _start
 sim.regs[2] = (sim.get_stack_top() - 16) & 0xffffffff
 
 try:
@@ -109,13 +100,4 @@ try:
         sim.execute()
 except HaltException as exc:
     print(f"Halt: {exc.reason} code={exc.code}")
-```
-
-If your program does not write to tohost, it may run indefinitely. Add a step
-limit if needed.
-
-## Running the unit tests
-
-```bash
-python3 -m unittest discover -s tests
 ```

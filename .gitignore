@@ -10,3 +10,10 @@ private/
 .claude/
 optimization_results/
 coremark/build_*/
+*.elf
+*.o
+*.a
+*.map
+*.d
+*.bin
+.coverage
