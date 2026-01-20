@@ -1,0 +1,23 @@
+{
+  "memif": {
+    "code": {
+      "module": "memif_cache:LRUCacheMemIf",
+      "config": {
+        "size_bytes": 2048,
+        "ways": 2,
+        "line_bytes": 32,
+        "hit_penalty": 0,
+        "miss_penalty": 0,
+        "write_allocate": true
+      }
+    },
+    "data": {
+      "module": "memif:FlatMemIf",
+      "config": {
+        "penalty": 0
+      }
+    }
+  },
+  "hw_stubs": {},
+  "func_stubs": {}
+}
